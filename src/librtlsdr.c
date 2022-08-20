@@ -941,6 +941,7 @@ uint16_t rtlsdr_demod_read_reg(rtlsdr_dev_t *dev, uint8_t page, uint16_t addr, u
 int rtlsdr_demod_write_reg(rtlsdr_dev_t *dev, uint8_t page, uint16_t addr, uint16_t val, uint8_t len)
 {
 	int r;
+	int retries = 2;
 	unsigned char data[2];
 	uint16_t index = 0x10 | page;
 	addr = (addr << 8) | 0x20;
@@ -952,12 +953,16 @@ int rtlsdr_demod_write_reg(rtlsdr_dev_t *dev, uint8_t page, uint16_t addr, uint1
 
 	data[1] = val & 0xff;
 
-	r = libusb_control_transfer(dev->devh, CTRL_OUT, 0, addr, index, data, len, CTRL_TIMEOUT);
+	do {
+		r = libusb_control_transfer(dev->devh, CTRL_OUT, 0, addr, index, data, len, CTRL_TIMEOUT);
+		rtlsdr_demod_read_reg(dev, 0x0a, 0x01, 1);
+		retries--;
+	} while (retries > 0 && r < 0);
 
 	if (r < 0)
 		fprintf(stderr, "%s failed with %d\n", __FUNCTION__, r);
 
-	rtlsdr_demod_read_reg(dev, 0x0a, 0x01, 1);
+	// rtlsdr_demod_read_reg(dev, 0x0a, 0x01, 1);
 
 	return (r == len) ? 0 : -1;
 }
@@ -1056,7 +1061,7 @@ int rtlsdr_set_gpio_byte(rtlsdr_dev_t *dev, int val)
 void rtlsdr_set_i2c_repeater(rtlsdr_dev_t *dev, int on)
 {
 	// on = !!on; /* values +2 to force on */
-	
+
 	if (on)
 		pthread_mutex_lock(&dev->cs_mutex);
 
